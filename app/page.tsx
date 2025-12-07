@@ -23,13 +23,17 @@ export default function Home() {
 
   // デバッグ: 環境変数の読み込み確認
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('環境変数チェック:', {
-        onesignalAppId: onesignalAppId || '❌ 未設定',
-        lpUrl: lpUrl || '❌ 未設定',
-      })
+    console.log('=== 環境変数チェック ===')
+    console.log('NODE_ENV:', process.env.NODE_ENV)
+    console.log('ONESIGNAL_APP_ID:', onesignalAppId || '❌ 未設定')
+    console.log('LP_URL:', lpUrl || '❌ 未設定')
+    console.log('======================')
+    
+    if (!onesignalAppId) {
+      console.warn('⚠️ OneSignal App IDが設定されていません！')
+      console.warn('⚠️ .env.localファイルに NEXT_PUBLIC_ONESIGNAL_APP_ID を設定してください')
     }
-  }, [])
+  }, [onesignalAppId, lpUrl])
 
   useEffect(() => {
     // PWAとして起動しているかチェック
@@ -66,30 +70,36 @@ export default function Home() {
           }
 
           // 既に読み込まれている場合
-          if (window.OneSignal) {
+          if (window.OneSignal && typeof window.OneSignal.init === 'function') {
+            console.log('OneSignal SDKは既に読み込まれています')
             resolve(window.OneSignal)
             return
           }
 
-          // OneSignalDeferredが存在する場合
+          // OneSignalDeferredが存在する場合（SDKが読み込み中）
           if (window.OneSignalDeferred) {
+            console.log('OneSignalDeferredを使用してSDKを待機中...')
             window.OneSignalDeferred.push(async function(OneSignal: any) {
+              console.log('OneSignalDeferred経由でSDKを取得しました')
               resolve(OneSignal)
             })
             return
           }
 
           // ポーリングで待つ
+          console.log('OneSignal SDKの読み込みを待機中...')
           let attempts = 0
-          const maxAttempts = 50 // 5秒間待つ
+          const maxAttempts = 100 // 10秒間待つ（長めに設定）
           const interval = setInterval(() => {
             attempts++
-            if (window.OneSignal) {
+            if (window.OneSignal && typeof window.OneSignal.init === 'function') {
               clearInterval(interval)
+              console.log(`OneSignal SDK読み込み完了（${attempts * 100}ms後）`)
               resolve(window.OneSignal)
             } else if (attempts >= maxAttempts) {
               clearInterval(interval)
-              reject(new Error('OneSignal SDKの読み込みがタイムアウトしました'))
+              console.error('OneSignal SDKの読み込みがタイムアウトしました')
+              reject(new Error('OneSignal SDKの読み込みがタイムアウトしました。ページを再読み込みしてください。'))
             }
           }, 100)
         })
