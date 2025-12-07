@@ -1,7 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import OneSignal from 'react-onesignal'
+
+declare global {
+  interface Window {
+    OneSignal: any
+    OneSignalDeferred: any[]
+  }
+}
 
 type Step = 1 | 2 | 3
 
@@ -35,10 +41,58 @@ export default function Home() {
     const initOneSignal = async () => {
       if (!onesignalAppId) {
         console.error('OneSignal App ID is not set')
+        setError('OneSignal App IDが設定されていません。環境変数を確認してください。')
         return
       }
 
+      console.log('OneSignal初期化開始...', { appId: onesignalAppId })
+
+      // OneSignal SDKが読み込まれるまで待つ
+      const waitForOneSignal = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          if (typeof window === 'undefined') {
+            reject(new Error('window is not defined'))
+            return
+          }
+
+          // 既に読み込まれている場合
+          if (window.OneSignal) {
+            resolve(window.OneSignal)
+            return
+          }
+
+          // OneSignalDeferredが存在する場合
+          if (window.OneSignalDeferred) {
+            window.OneSignalDeferred.push(async function(OneSignal: any) {
+              resolve(OneSignal)
+            })
+            return
+          }
+
+          // ポーリングで待つ
+          let attempts = 0
+          const maxAttempts = 50 // 5秒間待つ
+          const interval = setInterval(() => {
+            attempts++
+            if (window.OneSignal) {
+              clearInterval(interval)
+              resolve(window.OneSignal)
+            } else if (attempts >= maxAttempts) {
+              clearInterval(interval)
+              reject(new Error('OneSignal SDKの読み込みがタイムアウトしました'))
+            }
+          }, 100)
+        })
+      }
+
       try {
+        const OneSignal = await waitForOneSignal()
+        console.log('OneSignal SDK読み込み完了', OneSignal)
+
+        if (!OneSignal || typeof OneSignal.init !== 'function') {
+          throw new Error('OneSignal SDKが正しく読み込まれていません')
+        }
+
         await OneSignal.init({
           appId: onesignalAppId,
           allowLocalhostAsSecureOrigin: true,
@@ -52,10 +106,14 @@ export default function Home() {
           },
         })
 
+        console.log('OneSignal初期化成功')
+
         // すでに通知が有効になっているかチェック
         const enabled = await OneSignal.User.Push.isEnabled()
+        console.log('通知状態:', enabled)
         if (enabled) {
           const id = await OneSignal.User.getId()
+          console.log('Player ID:', id)
           if (id) {
             setIsSubscribed(true)
             setStep(3)
@@ -63,9 +121,12 @@ export default function Home() {
         }
 
         setIsInitialized(true)
-      } catch (err) {
+      } catch (err: any) {
         console.error('OneSignal initialization error:', err)
-        setError('OneSignalの初期化に失敗しました')
+        const errorMessage = err?.message || '不明なエラー'
+        setError(`OneSignalの初期化に失敗しました: ${errorMessage}`)
+        // エラーが発生しても、ボタンを有効にする（ユーザーが試せるように）
+        setIsInitialized(true)
       }
     }
 
@@ -82,9 +143,16 @@ export default function Home() {
       return
     }
 
+    if (typeof window === 'undefined' || !window.OneSignal) {
+      setError('OneSignal SDKが読み込まれていません。ページを再読み込みしてください。')
+      return
+    }
+
     setError(null)
 
     try {
+      const OneSignal = window.OneSignal
+      
       // 通知を有効化
       await OneSignal.User.Push.enable()
 
@@ -107,7 +175,7 @@ export default function Home() {
       if (err?.message?.includes('denied') || err?.message?.includes('permission')) {
         setError('通知が拒否されました。ブラウザの設定から通知を許可することができます。')
       } else {
-        setError('通知の許可に失敗しました。もう一度お試しください。')
+        setError(`通知の許可に失敗しました: ${err?.message || '不明なエラー'}`)
       }
     }
   }
@@ -187,6 +255,12 @@ export default function Home() {
               </div>
             )}
 
+            {!isInitialized && !error && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-700 text-sm">OneSignalを初期化中...</p>
+              </div>
+            )}
+
             <div className="space-y-4">
               <button
                 onClick={handleSubscribe}
@@ -199,6 +273,14 @@ export default function Home() {
               <p className="text-sm text-gray-500 text-center">
                 このボタンをタップすると、ブラウザの通知許可ダイアログが表示されます。
               </p>
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
+                  <p>デバッグ情報:</p>
+                  <p>初期化状態: {isInitialized ? '✅ 完了' : '⏳ 初期化中...'}</p>
+                  <p>App ID: {onesignalAppId ? '✅ 設定済み' : '❌ 未設定'}</p>
+                  {onesignalAppId && <p>App ID値: {onesignalAppId.substring(0, 8)}...</p>}
+                </div>
+              )}
             </div>
           </div>
         )}
