@@ -31,13 +31,20 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
-        <link rel="icon" href="/icon-192.png" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        {/* アイコンは後で追加するまでコメントアウト */}
+        {/* <link rel="icon" href="/icon-192.png" /> */}
+        {/* <link rel="apple-touch-icon" href="/icon-192.png" /> */}
       </head>
       <body className={inter.className}>
         <Script
           src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
+          onLoad={() => {
+            console.log('OneSignal SDK script loaded')
+          }}
+          onError={(e) => {
+            console.error('OneSignal SDK script load error:', e)
+          }}
         />
         {children}
       </body>
