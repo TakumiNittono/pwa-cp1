@@ -21,6 +21,16 @@ export default function Home() {
   const onesignalAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || ''
   const lpUrl = process.env.NEXT_PUBLIC_JP_LEARNING_LP_URL || ''
 
+  // デバッグ: 環境変数の読み込み確認
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('環境変数チェック:', {
+        onesignalAppId: onesignalAppId || '❌ 未設定',
+        lpUrl: lpUrl || '❌ 未設定',
+      })
+    }
+  }, [])
+
   useEffect(() => {
     // PWAとして起動しているかチェック
     const checkPWA = () => {
