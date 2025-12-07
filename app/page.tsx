@@ -43,6 +43,8 @@ export default function Home() {
           appId: onesignalAppId,
           allowLocalhostAsSecureOrigin: true,
           autoRegister: false,
+          serviceWorkerPath: '/OneSignalSDKWorker.js',
+          serviceWorkerParam: { scope: '/' },
           promptOptions: {
             slidedown: {
               enabled: false, // Push Primer 完全OFF
